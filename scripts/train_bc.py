@@ -22,6 +22,10 @@ Y = torch.tensor(np.concatenate(act_list, axis=0), dtype=torch.float32)
 print(f"Observations: {X.shape}, Actions: {Y.shape}")
 
 # SECOND: Define a simple nn policy
+# a training policy here is a nn: 
+# input: robots observations (OBS_KEYS) 
+# output: the robot's actions (7 numbers to control the robot)
+
 # nn.Sequential runs the models in order
 # first layer: input -> 256 hidden units, ReLU activation
 # second layer: 256 hidden units -> 256 hidden units, ReLU activation
@@ -36,3 +40,21 @@ policy = nn.Sequential(
 )
 
 # THIRD: Training loop
+# We will use MSE and Adam optimizer to train the policy
+# guess -> compare -> backprop -> update weights -> repeat
+optimizer = torch.optim.Adam(policy.parameters(), lr=1e-3)
+loss_fn = nn.MSELoss()
+N, batch = X.shape[0], 256
+
+for epoch in range(10):
+    perm = torch.randperm(N)
+    running_loss = 0.0
+    for i in range(0, N, batch):
+        idx = perm[i : i + batch] # randomly select a batch of indices
+        pred = policy(X[idx]) # predict the robot's actions given the robot's observations
+        loss = loss_fn(pred, Y[idx]) # compared predicted vs expected
+        optimizer.zero_grad() # clear grads from last step
+        loss.backward() # compute gradients for each weight via backprop
+        optimizer.step() # update weights using grads and lr
+        running_loss += loss.item() * len(idx) # accumulate loss for this batch
+    print(f"Epoch {epoch}: loss = {running_loss/N:.4f}")
