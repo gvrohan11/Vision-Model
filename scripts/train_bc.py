@@ -58,3 +58,6 @@ for epoch in range(10):
         optimizer.step() # update weights using grads and lr
         running_loss += loss.item() * len(idx) # accumulate loss for this batch
     print(f"Epoch {epoch}: loss = {running_loss/N:.4f}")
+
+torch.save(policy.state_dict(), "bc_policy.pt")
+print("Done training! Saved policy to bc_policy.pt")
