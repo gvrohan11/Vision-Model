@@ -1,8 +1,13 @@
 import numpy as np
+import imageio
+import os
 import torch
 import torch.nn as nn
 import robosuite as suite
 from robosuite.controllers import load_controller_config
+
+VIDEO_DIR = "videos"
+os.makedirs(VIDEO_DIR, exist_ok=True)
 
 # this script evaluates the policy trained in train_bc.py
 # the policy is a nn that takes in a robots observations and outputs the robots actions
@@ -15,9 +20,12 @@ env = suite.make(
     robots="Panda", # the arm doing it
     controller_configs=controller_config, # how we control the bot
     has_renderer=False, # no on-screen window
-    has_offscreen_renderer=False, # we still render offscreen, for the camera observations
-    use_camera_obs=False, # give us numbers, not images, for now
+    has_offscreen_renderer=True, # we still render offscreen, for the camera observations
+    use_camera_obs=True, # give us numbers, not images, for now
     use_object_obs=True, # give us numbers for cube's position and orientation
+    camera_names="agentview", # a fixed 3rd-person camera
+    camera_heights=256,
+    camera_widths=256,
     control_freq=20 # how many times per second we control robot and step simulation
 )
 
@@ -37,24 +45,29 @@ policy = nn.Sequential(
 policy.load_state_dict(torch.load("bc_policy.pt"))
 policy.eval()
 
-N_EPISODES = 50
+N_EPISODES = 5
 HORIZON = 400
 successes = 0
 for ep in range(N_EPISODES):
     obs = env.reset()
+    frames = []
     lifted = False
     for t in range(HORIZON):
         vec = obs_to_vec(obs)
         with torch.no_grad():
             action = policy(torch.tensor(vec)).numpy()
         obs, reward, done, info = env.step(action)
+        frames.append(obs["agentview_image"][::-1])
         if env._check_success():
             lifted = True
             break
     successes += int(lifted)
     if lifted:
-        print(f"Episode {ep:2d}: Success")
+        tag = "Success"
     else:
-        print(f"Episode {ep:2d}: Fail")
-success_rate = 100 * (successes / N_EPISODES)
-print(f"Success rate: {successes}/{N_EPISODES} = {success_rate:.0f}%")
+        tag = "Fail"
+    imageio.mimsave(os.path.join(VIDEO_DIR, f"rollout_ep{ep}_{tag}.mp4"), frames, fps=20)
+    print(f"Episode {ep}: {tag.upper()} {len(frames)} frames")
+
+    
+print("Videos saved in project folder")
